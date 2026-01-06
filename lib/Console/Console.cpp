@@ -82,6 +82,9 @@ static int prv_cmd_schedule_list(int argc, char* argv[], void* context);
 static int prv_cmd_schedule_clear(int argc, char* argv[], void* context);
 static int prv_cmd_schedule_enable(int argc, char* argv[], void* context);
 
+// Logging Commands
+static int prv_cmd_log(int argc, char* argv[], void* context);
+
 // ###########################################################################
 // # Private Variables
 // ###########################################################################
@@ -107,9 +110,6 @@ static cli_binding_t cli_bindings[] = {
     // Message Broker Test Commands
     {"msgbroker_test", prv_cmd_msgbroker_can_subscribe_and_publish, NULL, "Test Message Broker subscribe and publish"},
 
-    // Time Sync Commands
-    {"time", prv_cmd_time_get, NULL, "Get current time"},
-
     // WiFi Commands
     {"wifi_set", prv_cmd_wifi_set, NULL, "Set WiFi credentials: wifi_set <ssid> <password>"},
     {"wifi_get", prv_cmd_wifi_get, NULL, "Get current WiFi credentials"},
@@ -133,6 +133,7 @@ static cli_binding_t cli_bindings[] = {
     {"schedule_enable", prv_cmd_schedule_enable, NULL, "Enable/disable scheduling: schedule_enable <0|1>"},
 
     // Logging Commands
+    {"log", prv_cmd_log, NULL, "Enable/disable logging: log <on|off> <module_name>"},
 
 };
 
@@ -148,7 +149,6 @@ void console_init(void)
     Serial.begin(115200);
 
     // Subscribe to message broker responses
-    messagebroker_subscribe(MSG_0101, prv_time_callback);
     messagebroker_subscribe(MSG_0202, prv_wifi_callback);
     messagebroker_subscribe(MSG_0203, prv_wifi_callback);
     messagebroker_subscribe(MSG_0308, prv_mp3_callback);      // MP3 command responses
@@ -276,51 +276,6 @@ static int prv_cmd_msgbroker_can_subscribe_and_publish(int argc, char* argv[], v
     test_msg.data_bytes = (u8*)test_data;
 
     messagebroker_publish(&test_msg);
-
-    return CLI_OK_STATUS;
-}
-
-// ============================
-// = Time Sync Commands
-// ============================
-
-static void prv_time_callback(const msg_t* const message)
-{
-    switch (message->msg_id)
-    {
-        case MSG_0101:
-        {
-            msg_time_get_response_t* response = (msg_time_get_response_t*)message->data_bytes;
-
-            if (response->time_valid)
-            {
-                cli_print("Current time: %s", asctime(&response->timeinfo));
-                cli_print("Unix timestamp: %ld", (long)response->timestamp);
-            }
-            else
-            {
-                cli_print("Time not synchronized yet. WiFi might not be connected.");
-            }
-            break;
-        }
-        default: break;
-    }
-}
-
-static int prv_cmd_time_get(int argc, char* argv[], void* context)
-{
-    (void)argc;
-    (void)argv;
-    (void)context;
-
-    // Request time from TimeSync module
-    msg_time_get_request_t request;
-    msg_t msg;
-    msg.msg_id = MSG_0100;
-    msg.data_size = sizeof(msg_time_get_request_t);
-    msg.data_bytes = (u8*)&request;
-
-    messagebroker_publish(&msg);
 
     return CLI_OK_STATUS;
 }
@@ -814,6 +769,86 @@ static int prv_cmd_schedule_enable(int argc, char* argv[], void* context)
     msg.data_bytes = (u8*)&enable_cmd;
 
     cli_print("Scheduling %s", enabled ? "enabled" : "disabled");
+    messagebroker_publish(&msg);
+
+    return CLI_OK_STATUS;
+}
+
+// ============================
+// = Logging Commands
+// ============================
+
+static int prv_cmd_log(int argc, char* argv[], void* context)
+{
+    (void)context;
+
+    if (argc != 3)
+    {
+        cli_print("Usage: log <on|off> <module_name>");
+        cli_print("Available modules:");
+        cli_print("  appcontrol  - Application Control module");
+        cli_print("  mp3player   - MP3 Player module");
+        cli_print("  timesync    - Time Sync module");
+        cli_print("  wifimanager - WiFi Manager module");
+        cli_print("  all         - All modules");
+        return CLI_FAIL_STATUS;
+    }
+
+    bool enable = false;
+    if (strcmp(argv[1], "on") == 0)
+    {
+        enable = true;
+    }
+    else if (strcmp(argv[1], "off") == 0)
+    {
+        enable = false;
+    }
+    else
+    {
+        cli_print("Invalid parameter. Use 'on' or 'off'");
+        return CLI_FAIL_STATUS;
+    }
+
+    msg_set_logging_t log_cmd;
+    log_cmd.enabled = enable;
+
+    // Set module ID based on name
+    if (strcmp(argv[2], "appcontrol") == 0)
+    {
+        log_cmd.module_id = MODULE_APPCONTROL;
+    }
+    else if (strcmp(argv[2], "mp3player") == 0)
+    {
+        log_cmd.module_id = MODULE_MP3PLAYER;
+    }
+    else if (strcmp(argv[2], "timesync") == 0)
+    {
+        log_cmd.module_id = MODULE_TIMESYNC;
+    }
+    else if (strcmp(argv[2], "wifimanager") == 0)
+    {
+        log_cmd.module_id = MODULE_WIFIMANAGER;
+    }
+    else if (strcmp(argv[2], "all") == 0)
+    {
+        log_cmd.module_id = MODULE_ALL;
+    }
+    else
+    {
+        cli_print("Unknown module: %s", argv[2]);
+        return CLI_FAIL_STATUS;
+    }
+
+    // Copy module name
+    strncpy(log_cmd.module_name, argv[2], MODULE_NAME_MAX_LENGTH - 1);
+    log_cmd.module_name[MODULE_NAME_MAX_LENGTH - 1] = '\0';
+
+    msg_t msg;
+    msg.msg_id = MSG_0003;
+    msg.data_size = sizeof(msg_set_logging_t);
+    msg.data_bytes = (u8*)&log_cmd;
+
+    cli_print("Logging %s for module: %s", enable ? "enabled" : "disabled", argv[2]);
     messagebroker_publish(&msg);
 
     return CLI_OK_STATUS;

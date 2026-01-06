@@ -48,6 +48,7 @@ static void prv_mp3_message_handler(const msg_t* const message);
 // ###########################################################################
 
 static bool is_initialized = false;
+static bool logging_enabled = false; // Logging initially disabled
 
 // MP3 Player instance - für ESP32C6 verwenden wir HardwareSerial
 static WT2605C<HardwareSerial> mp3_player;
@@ -67,6 +68,7 @@ void mp3player_init(void)
     mp3_player.init(Serial0);
 
     // Subscribe to MP3 control messages
+    messagebroker_subscribe(MSG_0003, prv_mp3_message_handler); // Logging control
     messagebroker_subscribe(MSG_0300, prv_mp3_message_handler); // Set volume
     messagebroker_subscribe(MSG_0301, prv_mp3_message_handler); // Set play mode
     messagebroker_subscribe(MSG_0302, prv_mp3_message_handler); // Play song by index
@@ -101,10 +103,32 @@ static void prv_mp3_message_handler(const msg_t* const message)
 
     switch (message->msg_id)
     {
+        case MSG_0003: // Set logging
+        {
+            msg_set_logging_t* cmd = (msg_set_logging_t*)message->data_bytes;
+
+            // Check if this message is for us
+            if (cmd->module_id == MODULE_MP3PLAYER || cmd->module_id == MODULE_ALL
+                || strncmp(cmd->module_name, "mp3player", MODULE_NAME_MAX_LENGTH) == 0)
+            {
+                logging_enabled = cmd->enabled;
+                if (logging_enabled)
+                {
+                    Serial.println("[MP3Player] Logging enabled");
+                }
+            }
+            break;
+        }
+
         case MSG_0300: // Set volume
         {
             msg_mp3_set_volume_t* cmd = (msg_mp3_set_volume_t*)message->data_bytes;
             result = mp3_player.volume(cmd->volume);
+
+            if (logging_enabled)
+            {
+                Serial.printf("[MP3Player] Set volume to %d, result: %d\n", cmd->volume, result);
+            }
 
             // Send response
             msg_mp3_command_response_t response;
@@ -152,6 +176,11 @@ static void prv_mp3_message_handler(const msg_t* const message)
         {
             msg_mp3_play_song_t* cmd = (msg_mp3_play_song_t*)message->data_bytes;
             mp3_player.playSDRootSong(cmd->song_index);
+
+            if (logging_enabled)
+            {
+                Serial.printf("[MP3Player] Playing song %d\n", cmd->song_index);
+            }
 
             // Send response
             msg_mp3_command_response_t response;

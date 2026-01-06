@@ -73,6 +73,7 @@ static void prv_load_schedules_from_flash(void);
 // ###########################################################################
 static bool is_initialized = false;
 static bool scheduling_enabled = true;
+static bool logging_enabled = false; // Logging initially disabled
 static schedule_entry_t schedules[MAX_SCHEDULES];
 static struct tm current_time;
 static bool time_valid = false;
@@ -101,6 +102,7 @@ void appcontrol_init(void)
     prv_load_schedules_from_flash();
 
     // Subscribe to messages
+    messagebroker_subscribe(MSG_0003, prv_message_handler); // Logging control
     messagebroker_subscribe(MSG_0101, prv_message_handler); // Time response
     messagebroker_subscribe(MSG_0400, prv_message_handler); // Add schedule
     messagebroker_subscribe(MSG_0401, prv_message_handler); // Remove schedule
@@ -137,6 +139,23 @@ static void prv_message_handler(const msg_t* const message)
 {
     switch (message->msg_id)
     {
+        case MSG_0003: // Set logging
+        {
+            msg_set_logging_t* cmd = (msg_set_logging_t*)message->data_bytes;
+
+            // Check if this message is for us
+            if (cmd->module_id == MODULE_APPCONTROL || cmd->module_id == MODULE_ALL
+                || strncmp(cmd->module_name, "appcontrol", MODULE_NAME_MAX_LENGTH) == 0)
+            {
+                logging_enabled = cmd->enabled;
+                if (logging_enabled)
+                {
+                    Serial.println("[AppControl] Logging enabled");
+                }
+            }
+            break;
+        }
+
         case MSG_0101: // Time response
         {
             msg_time_get_response_t* response = (msg_time_get_response_t*)message->data_bytes;
@@ -313,6 +332,12 @@ static void prv_check_schedules(const struct tm* timeinfo)
         // Check if time matches and hasn't been triggered yet this minute
         if (schedules[i].hour == current_hour && schedules[i].minute == current_min && !schedules[i].triggered)
         {
+            if (logging_enabled)
+            {
+                Serial.printf("[AppControl] Triggering schedule %d: Playing song %d at %02d:%02d\n", i,
+                              schedules[i].song_index, current_hour, current_min);
+            }
+
             // Trigger song playback
             prv_play_song(schedules[i].song_index);
             schedules[i].triggered = true;

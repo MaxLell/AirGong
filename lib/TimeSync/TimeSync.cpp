@@ -59,6 +59,7 @@ static void prv_sync_time_from_ntp(void);
 // ###########################################################################
 static bool is_initialized = false;
 static bool time_synchronized = false;
+static bool logging_enabled = false; // Logging initially disabled
 static TaskHandle_t timesync_task_handle = NULL;
 
 // ###########################################################################
@@ -70,6 +71,7 @@ void timesync_init(void)
     ASSERT(!is_initialized);
 
     // Subscribe to time request messages
+    messagebroker_subscribe(MSG_0003, prv_message_broker_callback); // Logging control
     messagebroker_subscribe(MSG_0100, prv_message_broker_callback);
 
     is_initialized = true;
@@ -136,15 +138,21 @@ static void prv_sync_time_from_ntp(void)
         if (getLocalTime(&timeinfo))
         {
             time_synchronized = true;
-            Serial.println("[TimeSync] Time synchronized with NTP server");
-            Serial.printf("[TimeSync] Current time: %s", asctime(&timeinfo));
+            if (logging_enabled)
+            {
+                Serial.println("[TimeSync] Time synchronized with NTP server");
+                Serial.printf("[TimeSync] Current time: %s", asctime(&timeinfo));
+            }
             return;
         }
         retry++;
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 
-    Serial.println("[TimeSync] Failed to synchronize time with NTP server");
+    if (logging_enabled)
+    {
+        Serial.println("[TimeSync] Failed to synchronize time with NTP server");
+    }
     time_synchronized = false;
 }
 
@@ -154,6 +162,23 @@ static void prv_message_broker_callback(const msg_t* const message)
 
     switch (message->msg_id)
     {
+        case MSG_0003: // Set logging
+        {
+            msg_set_logging_t* cmd = (msg_set_logging_t*)message->data_bytes;
+
+            // Check if this message is for us
+            if (cmd->module_id == MODULE_TIMESYNC || cmd->module_id == MODULE_ALL
+                || strncmp(cmd->module_name, "timesync", MODULE_NAME_MAX_LENGTH) == 0)
+            {
+                logging_enabled = cmd->enabled;
+                if (logging_enabled)
+                {
+                    Serial.println("[TimeSync] Logging enabled");
+                }
+            }
+            break;
+        }
+
         case MSG_0100:
         {
             msg_time_get_response_t response;
@@ -163,11 +188,23 @@ static void prv_message_broker_callback(const msg_t* const message)
             {
                 time(&response.timestamp);
                 getLocalTime(&response.timeinfo);
+
+                if (logging_enabled)
+                {
+                    Serial.println("[TimeSync] Time request received");
+                    Serial.printf("[TimeSync] Current time: %s", asctime(&response.timeinfo));
+                    Serial.printf("[TimeSync] Unix timestamp: %ld\n", (long)response.timestamp);
+                }
             }
             else
             {
                 response.timestamp = 0;
                 memset(&response.timeinfo, 0, sizeof(struct tm));
+
+                if (logging_enabled)
+                {
+                    Serial.println("[TimeSync] Time request received but time not synchronized yet");
+                }
             }
 
             msg_t response_msg;

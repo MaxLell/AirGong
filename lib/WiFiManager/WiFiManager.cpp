@@ -63,6 +63,7 @@ static void prv_publish_connection_status(void);
 // ###########################################################################
 static bool is_initialized = false;
 static bool is_connected = false;
+static bool logging_enabled = false; // Logging initially disabled
 static TaskHandle_t wifimanager_task_handle = NULL;
 static Preferences preferences;
 
@@ -85,6 +86,7 @@ void wifimanager_init(void)
     has_credentials = prv_load_credentials(current_ssid, current_password);
 
     // Subscribe to WiFi messages
+    messagebroker_subscribe(MSG_0003, prv_message_broker_callback); // Logging control
     messagebroker_subscribe(MSG_0200, prv_message_broker_callback);
     messagebroker_subscribe(MSG_0201, prv_message_broker_callback);
 
@@ -161,11 +163,17 @@ static void prv_connect_to_wifi(void)
 {
     if (!has_credentials)
     {
-        Serial.println("[WiFiManager] No credentials available");
+        if (logging_enabled)
+        {
+            Serial.println("[WiFiManager] No credentials available");
+        }
         return;
     }
 
-    Serial.printf("[WiFiManager] Connecting to SSID: %s\n", current_ssid);
+    if (logging_enabled)
+    {
+        Serial.printf("[WiFiManager] Connecting to SSID: %s\n", current_ssid);
+    }
 
     WiFi.mode(WIFI_STA);
     WiFi.begin(current_ssid, current_password);
@@ -188,20 +196,32 @@ static void prv_connect_to_wifi(void)
     while (WiFi.status() != WL_CONNECTED && (millis() - start_time) < WIFI_CONNECT_TIMEOUT_MS)
     {
         delay(500);
-        Serial.print(".");
+        if (logging_enabled)
+        {
+            Serial.print(".");
+        }
     }
-    Serial.println();
+    if (logging_enabled)
+    {
+        Serial.println();
+    }
 
     if (WiFi.status() == WL_CONNECTED)
     {
         is_connected = true;
-        Serial.println("[WiFiManager] Successfully connected");
+        if (logging_enabled)
+        {
+            Serial.println("[WiFiManager] Successfully connected");
+        }
         prv_publish_connection_status();
     }
     else
     {
         is_connected = false;
-        Serial.println("[WiFiManager] Connection failed");
+        if (logging_enabled)
+        {
+            Serial.println("[WiFiManager] Connection failed");
+        }
 
         status_msg.status = WIFI_STATUS_FAILED;
         status_msg.rssi = 0;
@@ -222,7 +242,10 @@ static void prv_save_credentials(const char* ssid, const char* password)
 
     has_credentials = true;
 
-    Serial.println("[WiFiManager] Credentials saved to storage");
+    if (logging_enabled)
+    {
+        Serial.println("[WiFiManager] Credentials saved to storage");
+    }
 }
 
 static bool prv_load_credentials(char* ssid, char* password)
@@ -276,6 +299,23 @@ static void prv_message_broker_callback(const msg_t* const message)
 
     switch (message->msg_id)
     {
+        case MSG_0003: // Set logging
+        {
+            msg_set_logging_t* cmd = (msg_set_logging_t*)message->data_bytes;
+            
+            // Check if this message is for us
+            if (cmd->module_id == MODULE_WIFIMANAGER || cmd->module_id == MODULE_ALL ||
+                strncmp(cmd->module_name, "wifimanager", MODULE_NAME_MAX_LENGTH) == 0)
+            {
+                logging_enabled = cmd->enabled;
+                if (logging_enabled)
+                {
+                    Serial.println("[WiFiManager] Logging enabled");
+                }
+            }
+            break;
+        }
+
         case MSG_0200:
         {
             ASSERT(message->data_size == sizeof(msg_wifi_set_credentials_t));

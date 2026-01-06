@@ -5,6 +5,29 @@
 #include "custom_types.h"
 
 // =============================
+// System Message Structures
+// =============================
+
+#define MODULE_NAME_MAX_LENGTH 32
+
+typedef enum
+{
+    MODULE_APPCONTROL = 0,
+    MODULE_MP3PLAYER,
+    MODULE_TIMESYNC,
+    MODULE_WIFIMANAGER,
+    MODULE_CONSOLE,
+    MODULE_ALL // Special value for all modules
+} module_id_e;
+
+typedef struct
+{
+    module_id_e module_id;                    // Module to configure
+    bool enabled;                             // Enable or disable logging
+    char module_name[MODULE_NAME_MAX_LENGTH]; // Module name as string (alternative to ID)
+} msg_set_logging_t;
+
+// =============================
 // Time Sync Message Structures
 // =============================
 
