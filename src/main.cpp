@@ -2,6 +2,8 @@
 #include "BlinkLed.h"
 #include "Console.h"
 #include "MessageBroker.h"
+#include "TimeSync.h"
+#include "WiFiManager.h"
 #include "custom_assert.h"
 
 // FreeRTOS includes
@@ -37,6 +39,14 @@ void setup()
     custom_assert_init(prv_assert_failed);
 
     messagebroker_init();
+
+    // Initialize WiFi Manager
+    wifimanager_init();
+    wifimanager_start_task();
+
+    // Initialize Time Sync
+    timesync_init();
+    timesync_start_task();
 
     // Create console task
     xTaskCreate(console_task,        // Task function

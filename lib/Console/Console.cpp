@@ -54,6 +54,15 @@ static int prv_cmd_reset_system(int argc, char* argv[], void* context);
 static void prv_msg_broker_callback(const msg_t* const message);
 static int prv_cmd_msgbroker_can_subscribe_and_publish(int argc, char* argv[], void* context);
 
+// Time Sync Commands
+static void prv_time_callback(const msg_t* const message);
+static int prv_cmd_time_get(int argc, char* argv[], void* context);
+
+// WiFi Commands
+static void prv_wifi_callback(const msg_t* const message);
+static int prv_cmd_wifi_set(int argc, char* argv[], void* context);
+static int prv_cmd_wifi_get(int argc, char* argv[], void* context);
+
 // ###########################################################################
 // # Private Variables
 // ###########################################################################
@@ -79,6 +88,13 @@ static cli_binding_t cli_bindings[] = {
     // Message Broker Test Commands
     {"msgbroker_test", prv_cmd_msgbroker_can_subscribe_and_publish, NULL, "Test Message Broker subscribe and publish"},
 
+    // Time Sync Commands
+    {"time", prv_cmd_time_get, NULL, "Get current time"},
+
+    // WiFi Commands
+    {"wifi_set", prv_cmd_wifi_set, NULL, "Set WiFi credentials: wifi_set <ssid> <password>"},
+    {"wifi_get", prv_cmd_wifi_get, NULL, "Get current WiFi credentials"},
+
     // Logging Commands
 
 };
@@ -93,6 +109,11 @@ void console_init(void)
 
     // Initialize Serial communication
     Serial.begin(115200);
+
+    // Subscribe to message broker responses
+    messagebroker_subscribe(MSG_0101, prv_time_callback);
+    messagebroker_subscribe(MSG_0202, prv_wifi_callback);
+    messagebroker_subscribe(MSG_0203, prv_wifi_callback);
 
     cli_init(&g_cli_cfg, prv_console_put_char);
 
@@ -215,6 +236,142 @@ static int prv_cmd_msgbroker_can_subscribe_and_publish(int argc, char* argv[], v
     test_msg.data_bytes = (u8*)test_data;
 
     messagebroker_publish(&test_msg);
+
+    return CLI_OK_STATUS;
+}
+
+// ============================
+// = Time Sync Commands
+// ============================
+
+static void prv_time_callback(const msg_t* const message)
+{
+    switch (message->msg_id)
+    {
+        case MSG_0101:
+        {
+            msg_time_get_response_t* response = (msg_time_get_response_t*)message->data_bytes;
+
+            if (response->time_valid)
+            {
+                cli_print("Current time: %s", asctime(&response->timeinfo));
+                cli_print("Unix timestamp: %ld", (long)response->timestamp);
+            }
+            else
+            {
+                cli_print("Time not synchronized yet. WiFi might not be connected.");
+            }
+            break;
+        }
+        default: break;
+    }
+}
+
+static int prv_cmd_time_get(int argc, char* argv[], void* context)
+{
+    (void)argc;
+    (void)argv;
+    (void)context;
+
+    // Request time from TimeSync module
+    msg_time_get_request_t request;
+    msg_t msg;
+    msg.msg_id = MSG_0100;
+    msg.data_size = sizeof(msg_time_get_request_t);
+    msg.data_bytes = (u8*)&request;
+
+    messagebroker_publish(&msg);
+
+    return CLI_OK_STATUS;
+}
+
+// ============================
+// = WiFi Commands
+// ============================
+
+static void prv_wifi_callback(const msg_t* const message)
+{
+    switch (message->msg_id)
+    {
+        case MSG_0202:
+        {
+            msg_wifi_credentials_response_t* response = (msg_wifi_credentials_response_t*)message->data_bytes;
+
+            if (response->has_credentials)
+            {
+                cli_print("WiFi Credentials:");
+                cli_print("  SSID: %s", response->ssid);
+                cli_print("  Password: %s", response->password);
+            }
+            else
+            {
+                cli_print("No WiFi credentials stored.");
+            }
+            break;
+        }
+
+        case MSG_0203:
+        {
+            msg_wifi_connection_status_t* status = (msg_wifi_connection_status_t*)message->data_bytes;
+
+            switch (status->status)
+            {
+                case WIFI_STATUS_DISCONNECTED: cli_print("WiFi Status: Disconnected"); break;
+                case WIFI_STATUS_CONNECTING: cli_print("WiFi Status: Connecting to %s...", status->ssid); break;
+                case WIFI_STATUS_CONNECTED:
+                    cli_print("WiFi Status: Connected to %s (RSSI: %d dBm)", status->ssid, status->rssi);
+                    break;
+                case WIFI_STATUS_FAILED: cli_print("WiFi Status: Connection failed"); break;
+            }
+            break;
+        }
+
+        default: break;
+    }
+}
+
+static int prv_cmd_wifi_set(int argc, char* argv[], void* context)
+{
+    (void)context;
+
+    if (argc != 3)
+    {
+        cli_print("Usage: wifi_set <ssid> <password>");
+        return CLI_FAIL_STATUS;
+    }
+
+    msg_wifi_set_credentials_t credentials;
+    strncpy(credentials.ssid, argv[1], WIFI_SSID_MAX_LENGTH - 1);
+    credentials.ssid[WIFI_SSID_MAX_LENGTH - 1] = '\0';
+
+    strncpy(credentials.password, argv[2], WIFI_PASSWORD_MAX_LENGTH - 1);
+    credentials.password[WIFI_PASSWORD_MAX_LENGTH - 1] = '\0';
+
+    msg_t msg;
+    msg.msg_id = MSG_0200;
+    msg.data_size = sizeof(msg_wifi_set_credentials_t);
+    msg.data_bytes = (u8*)&credentials;
+
+    cli_print("Setting WiFi credentials...");
+    messagebroker_publish(&msg);
+
+    return CLI_OK_STATUS;
+}
+
+static int prv_cmd_wifi_get(int argc, char* argv[], void* context)
+{
+    (void)argc;
+    (void)argv;
+    (void)context;
+
+    // Request WiFi credentials
+    msg_wifi_get_credentials_t request;
+    msg_t msg;
+    msg.msg_id = MSG_0201;
+    msg.data_size = sizeof(msg_wifi_get_credentials_t);
+    msg.data_bytes = (u8*)&request;
+
+    messagebroker_publish(&msg);
 
     return CLI_OK_STATUS;
 }
