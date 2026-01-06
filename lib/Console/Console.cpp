@@ -197,10 +197,16 @@ static int prv_cmd_msgbroker_can_subscribe_and_publish(int argc, char* argv[], v
     (void)argv;
     (void)context;
 
-    // Subscribe to a test message
-    messagebroker_subscribe(MSG_0001, prv_msg_broker_callback);
+    static bool run_once = true;
 
-    cli_print("Subscribed to MSG_0001 \n... \nNow publishing a test message. \n...");
+    if (run_once)
+    {
+        // Subscribe to a test message
+        cli_print("Subscribed to MSG_0001 \n... \nNow publishing a test message. \n...");
+        messagebroker_subscribe(MSG_0001, prv_msg_broker_callback);
+        run_once = false;
+    }
+
     // Publish a test message
     msg_t test_msg;
     test_msg.msg_id = MSG_0001;
