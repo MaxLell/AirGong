@@ -107,15 +107,15 @@ static cli_binding_t cli_bindings[] = {
     {"wifi_get", prv_cmd_wifi_get, NULL, "Get current WiFi credentials"},
 
     // MP3 Player Commands
-    {"v", prv_cmd_mp3_volume, NULL, "Set volume: v <0-31>"},
-    {"m", prv_cmd_mp3_mode, NULL,
-     "Set play mode: m <1-5> (1=loop, 2=single loop, 3=folder loop, 4=random, 5=single shot)"},
-    {"b", prv_cmd_mp3_play, NULL, "Play song by index: b <index>"},
-    {"+", prv_cmd_mp3_volume_up, NULL, "Increase volume"},
-    {"-", prv_cmd_mp3_volume_down, NULL, "Decrease volume"},
-    {"n", prv_cmd_mp3_next, NULL, "Next song"},
-    {"p", prv_cmd_mp3_previous, NULL, "Previous song"},
-    {"s", prv_cmd_mp3_pause, NULL, "Pause or play"},
+    {"speaker_volume", prv_cmd_mp3_volume, NULL, "Set volume: speaker_volume <0-31>"},
+    {"speaker_mode", prv_cmd_mp3_mode, NULL,
+     "Set play mode: speaker_mode <1-5> (1=loop, 2=single loop, 3=folder loop, 4=random, 5=single shot)"},
+    {"speaker_play", prv_cmd_mp3_play, NULL, "Play song by index: speaker_play <index>"},
+    {"speaker_volume_up", prv_cmd_mp3_volume_up, NULL, "Increase volume"},
+    {"speaker_volume_down", prv_cmd_mp3_volume_down, NULL, "Decrease volume"},
+    {"speaker_next", prv_cmd_mp3_next, NULL, "Next song"},
+    {"speaker_previous", prv_cmd_mp3_previous, NULL, "Previous song"},
+    {"speaker_pause", prv_cmd_mp3_pause, NULL, "Pause or play"},
 
     // Logging Commands
 
@@ -432,7 +432,7 @@ static int prv_cmd_mp3_volume(int argc, char* argv[], void* context)
 
     if (argc != 2)
     {
-        cli_print("Usage: v <volume> (0-31)");
+        cli_print("Usage: speaker_volume <volume> (0-31)");
         return CLI_FAIL_STATUS;
     }
 
@@ -463,7 +463,7 @@ static int prv_cmd_mp3_mode(int argc, char* argv[], void* context)
 
     if (argc != 2)
     {
-        cli_print("Usage: m <mode>");
+        cli_print("Usage: speaker_mode <mode>");
         cli_print("  1 - Loop mode");
         cli_print("  2 - Single song loop mode");
         cli_print("  3 - Folder loop mode");
@@ -500,7 +500,7 @@ static int prv_cmd_mp3_play(int argc, char* argv[], void* context)
 
     if (argc != 2)
     {
-        cli_print("Usage: b <song_index>");
+        cli_print("Usage: speaker_play <song_index>");
         return CLI_FAIL_STATUS;
     }
 

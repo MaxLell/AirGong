@@ -77,6 +77,10 @@ void mp3player_init(void)
     messagebroker_subscribe(MSG_0307, prv_mp3_message_handler); // Pause or play
 
     is_initialized = true;
+
+    // Set the default volume to 20
+    u8 result = mp3_player.volume(20);
+    ASSERT(result == 0);
 }
 
 void mp3player_run(void)
