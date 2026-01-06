@@ -60,4 +60,38 @@ typedef struct
     int rssi; // Signal strength
 } msg_wifi_connection_status_t;
 
+// =============================
+// MP3 Player Message Structures
+// =============================
+
+typedef enum
+{
+    MP3_MODE_LOOP = 1,        // Loop all songs
+    MP3_MODE_SINGLE_LOOP = 2, // Loop single song
+    MP3_MODE_FOLDER_LOOP = 3, // Loop folder
+    MP3_MODE_RANDOM = 4,      // Random playback
+    MP3_MODE_SINGLE_SHOT = 5  // Play single song once
+} mp3_play_mode_e;
+
+typedef struct
+{
+    u8 volume; // Volume level (0-31)
+} msg_mp3_set_volume_t;
+
+typedef struct
+{
+    mp3_play_mode_e mode; // Play mode
+} msg_mp3_set_playmode_t;
+
+typedef struct
+{
+    u16 song_index; // Song index to play
+} msg_mp3_play_song_t;
+
+typedef struct
+{
+    bool success;   // Whether command was successful
+    int error_code; // Error code if not successful
+} msg_mp3_command_response_t;
+
 #endif // MESSAGE_DEFINITIONS_H

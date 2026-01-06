@@ -26,6 +26,17 @@ typedef enum
     MSG_0202, // Response with WiFi credentials
     MSG_0203, // WiFi connection status update
 
+    // MP3 Player Messages
+    MSG_0300, // Set volume
+    MSG_0301, // Set play mode
+    MSG_0302, // Play song by index
+    MSG_0303, // Volume up
+    MSG_0304, // Volume down
+    MSG_0305, // Next song
+    MSG_0306, // Previous song
+    MSG_0307, // Pause or play
+    MSG_0308, // Command response
+
     E_TOPIC_LAST_TOPIC // Last Topic - DO NOT USE (Only for boundary checks)
 } msg_id_e;
 

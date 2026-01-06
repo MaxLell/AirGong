@@ -63,6 +63,17 @@ static void prv_wifi_callback(const msg_t* const message);
 static int prv_cmd_wifi_set(int argc, char* argv[], void* context);
 static int prv_cmd_wifi_get(int argc, char* argv[], void* context);
 
+// MP3 Player Commands
+static void prv_mp3_callback(const msg_t* const message);
+static int prv_cmd_mp3_volume(int argc, char* argv[], void* context);
+static int prv_cmd_mp3_mode(int argc, char* argv[], void* context);
+static int prv_cmd_mp3_play(int argc, char* argv[], void* context);
+static int prv_cmd_mp3_volume_up(int argc, char* argv[], void* context);
+static int prv_cmd_mp3_volume_down(int argc, char* argv[], void* context);
+static int prv_cmd_mp3_next(int argc, char* argv[], void* context);
+static int prv_cmd_mp3_previous(int argc, char* argv[], void* context);
+static int prv_cmd_mp3_pause(int argc, char* argv[], void* context);
+
 // ###########################################################################
 // # Private Variables
 // ###########################################################################
@@ -95,6 +106,17 @@ static cli_binding_t cli_bindings[] = {
     {"wifi_set", prv_cmd_wifi_set, NULL, "Set WiFi credentials: wifi_set <ssid> <password>"},
     {"wifi_get", prv_cmd_wifi_get, NULL, "Get current WiFi credentials"},
 
+    // MP3 Player Commands
+    {"v", prv_cmd_mp3_volume, NULL, "Set volume: v <0-31>"},
+    {"m", prv_cmd_mp3_mode, NULL,
+     "Set play mode: m <1-5> (1=loop, 2=single loop, 3=folder loop, 4=random, 5=single shot)"},
+    {"b", prv_cmd_mp3_play, NULL, "Play song by index: b <index>"},
+    {"+", prv_cmd_mp3_volume_up, NULL, "Increase volume"},
+    {"-", prv_cmd_mp3_volume_down, NULL, "Decrease volume"},
+    {"n", prv_cmd_mp3_next, NULL, "Next song"},
+    {"p", prv_cmd_mp3_previous, NULL, "Previous song"},
+    {"s", prv_cmd_mp3_pause, NULL, "Pause or play"},
+
     // Logging Commands
 
 };
@@ -114,6 +136,7 @@ void console_init(void)
     messagebroker_subscribe(MSG_0101, prv_time_callback);
     messagebroker_subscribe(MSG_0202, prv_wifi_callback);
     messagebroker_subscribe(MSG_0203, prv_wifi_callback);
+    messagebroker_subscribe(MSG_0308, prv_mp3_callback); // MP3 command responses
 
     cli_init(&g_cli_cfg, prv_console_put_char);
 
@@ -371,6 +394,217 @@ static int prv_cmd_wifi_get(int argc, char* argv[], void* context)
     msg.data_size = sizeof(msg_wifi_get_credentials_t);
     msg.data_bytes = (u8*)&request;
 
+    messagebroker_publish(&msg);
+
+    return CLI_OK_STATUS;
+}
+
+// ============================
+// = MP3 Player Commands
+// ============================
+
+static void prv_mp3_callback(const msg_t* const message)
+{
+    switch (message->msg_id)
+    {
+        case MSG_0308:
+        {
+            msg_mp3_command_response_t* response = (msg_mp3_command_response_t*)message->data_bytes;
+
+            if (response->success)
+            {
+                cli_print("MP3 Command successful");
+            }
+            else
+            {
+                cli_print("MP3 Command failed with error code: %d", response->error_code);
+            }
+            break;
+        }
+
+        default: break;
+    }
+}
+
+static int prv_cmd_mp3_volume(int argc, char* argv[], void* context)
+{
+    (void)context;
+
+    if (argc != 2)
+    {
+        cli_print("Usage: v <volume> (0-31)");
+        return CLI_FAIL_STATUS;
+    }
+
+    int volume = atoi(argv[1]);
+    if (volume < 0 || volume > 31)
+    {
+        cli_print("Volume must be between 0 and 31");
+        return CLI_FAIL_STATUS;
+    }
+
+    msg_mp3_set_volume_t vol_cmd;
+    vol_cmd.volume = (u8)volume;
+
+    msg_t msg;
+    msg.msg_id = MSG_0300;
+    msg.data_size = sizeof(msg_mp3_set_volume_t);
+    msg.data_bytes = (u8*)&vol_cmd;
+
+    cli_print("Setting volume to: %d", volume);
+    messagebroker_publish(&msg);
+
+    return CLI_OK_STATUS;
+}
+
+static int prv_cmd_mp3_mode(int argc, char* argv[], void* context)
+{
+    (void)context;
+
+    if (argc != 2)
+    {
+        cli_print("Usage: m <mode>");
+        cli_print("  1 - Loop mode");
+        cli_print("  2 - Single song loop mode");
+        cli_print("  3 - Folder loop mode");
+        cli_print("  4 - Random mode");
+        cli_print("  5 - Single song mode");
+        return CLI_FAIL_STATUS;
+    }
+
+    int mode = atoi(argv[1]);
+    if (mode < 1 || mode > 5)
+    {
+        cli_print("Mode must be between 1 and 5");
+        return CLI_FAIL_STATUS;
+    }
+
+    msg_mp3_set_playmode_t mode_cmd;
+    mode_cmd.mode = (mp3_play_mode_e)mode;
+
+    msg_t msg;
+    msg.msg_id = MSG_0301;
+    msg.data_size = sizeof(msg_mp3_set_playmode_t);
+    msg.data_bytes = (u8*)&mode_cmd;
+
+    const char* mode_names[] = {"", "Loop", "Single Loop", "Folder Loop", "Random", "Single Shot"};
+    cli_print("Setting play mode to: %s", mode_names[mode]);
+    messagebroker_publish(&msg);
+
+    return CLI_OK_STATUS;
+}
+
+static int prv_cmd_mp3_play(int argc, char* argv[], void* context)
+{
+    (void)context;
+
+    if (argc != 2)
+    {
+        cli_print("Usage: b <song_index>");
+        return CLI_FAIL_STATUS;
+    }
+
+    int song_index = atoi(argv[1]);
+    if (song_index < 1)
+    {
+        cli_print("Song index must be >= 1");
+        return CLI_FAIL_STATUS;
+    }
+
+    msg_mp3_play_song_t play_cmd;
+    play_cmd.song_index = (u16)song_index;
+
+    msg_t msg;
+    msg.msg_id = MSG_0302;
+    msg.data_size = sizeof(msg_mp3_play_song_t);
+    msg.data_bytes = (u8*)&play_cmd;
+
+    cli_print("Playing song: %d", song_index);
+    messagebroker_publish(&msg);
+
+    return CLI_OK_STATUS;
+}
+
+static int prv_cmd_mp3_volume_up(int argc, char* argv[], void* context)
+{
+    (void)argc;
+    (void)argv;
+    (void)context;
+
+    msg_t msg;
+    msg.msg_id = MSG_0303;
+    msg.data_size = 0;
+    msg.data_bytes = NULL;
+
+    cli_print("Volume up");
+    messagebroker_publish(&msg);
+
+    return CLI_OK_STATUS;
+}
+
+static int prv_cmd_mp3_volume_down(int argc, char* argv[], void* context)
+{
+    (void)argc;
+    (void)argv;
+    (void)context;
+
+    msg_t msg;
+    msg.msg_id = MSG_0304;
+    msg.data_size = 0;
+    msg.data_bytes = NULL;
+
+    cli_print("Volume down");
+    messagebroker_publish(&msg);
+
+    return CLI_OK_STATUS;
+}
+
+static int prv_cmd_mp3_next(int argc, char* argv[], void* context)
+{
+    (void)argc;
+    (void)argv;
+    (void)context;
+
+    msg_t msg;
+    msg.msg_id = MSG_0305;
+    msg.data_size = 0;
+    msg.data_bytes = NULL;
+
+    cli_print("Next song");
+    messagebroker_publish(&msg);
+
+    return CLI_OK_STATUS;
+}
+
+static int prv_cmd_mp3_previous(int argc, char* argv[], void* context)
+{
+    (void)argc;
+    (void)argv;
+    (void)context;
+
+    msg_t msg;
+    msg.msg_id = MSG_0306;
+    msg.data_size = 0;
+    msg.data_bytes = NULL;
+
+    cli_print("Previous song");
+    messagebroker_publish(&msg);
+
+    return CLI_OK_STATUS;
+}
+
+static int prv_cmd_mp3_pause(int argc, char* argv[], void* context)
+{
+    (void)argc;
+    (void)argv;
+    (void)context;
+
+    msg_t msg;
+    msg.msg_id = MSG_0307;
+    msg.data_size = 0;
+    msg.data_bytes = NULL;
+
+    cli_print("Pause or Play");
     messagebroker_publish(&msg);
 
     return CLI_OK_STATUS;

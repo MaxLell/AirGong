@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include "BlinkLed.h"
 #include "Console.h"
+#include "MP3Player.h"
 #include "MessageBroker.h"
 #include "TimeSync.h"
 #include "WiFiManager.h"
@@ -39,6 +40,9 @@ void setup()
     custom_assert_init(prv_assert_failed);
 
     messagebroker_init();
+
+    // Initialize MP3 Player
+    mp3player_init();
 
     // Initialize WiFi Manager
     wifimanager_init();
