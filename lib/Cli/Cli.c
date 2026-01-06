@@ -473,19 +473,46 @@ static uint8_t prv_get_args_from_rx_buffer(char* array_of_arguments[], uint8_t m
 
     uint8_t nof_identified_arguments = 0;
     char* next_argument = NULL;
+    bool inside_quotes = false;
 
     // Process the Buffer - tokenize arguments separated by spaces or newlines
+    // Support quoted strings to allow spaces within arguments
     for (uint8_t i = 0; i < g_cli_cfg_reference->nof_stored_chars_in_rx_buffer; i++)
     {
         ASSERT(nof_identified_arguments <= max_arguments);
 
         char* const current_char = &g_cli_cfg_reference->rx_char_buffer[i];
+        const bool is_quote = ('"' == *current_char);
         const bool is_delimiter_char = (' ' == *current_char || '\n' == *current_char);
         const bool is_last_char = (i == (g_cli_cfg_reference->nof_stored_chars_in_rx_buffer - 1));
 
-        if (is_delimiter_char)
+        if (is_quote)
         {
-            // Found delimiter - terminate current argument if any
+            // Toggle quote state
+            inside_quotes = !inside_quotes;
+
+            // Remove the quote character from the buffer
+            *current_char = '\0';
+
+            if (inside_quotes)
+            {
+                // Start of quoted string - next char starts the argument
+                next_argument = NULL;
+            }
+            else
+            {
+                // End of quoted string - save the argument
+                if (next_argument != NULL)
+                {
+                    array_of_arguments[nof_identified_arguments] = next_argument;
+                    nof_identified_arguments++;
+                    next_argument = NULL;
+                }
+            }
+        }
+        else if (is_delimiter_char && !inside_quotes)
+        {
+            // Found delimiter outside quotes - terminate current argument if any
             *current_char = '\0';
             if (next_argument != NULL)
             {
@@ -496,7 +523,7 @@ static uint8_t prv_get_args_from_rx_buffer(char* array_of_arguments[], uint8_t m
         }
         else
         {
-            // Non-delimiter character
+            // Regular character (or delimiter inside quotes)
             if (next_argument == NULL)
             {
                 // Start of new argument

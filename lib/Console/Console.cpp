@@ -111,7 +111,7 @@ static cli_binding_t cli_bindings[] = {
     {"msgbroker_test", prv_cmd_msgbroker_can_subscribe_and_publish, NULL, "Test Message Broker subscribe and publish"},
 
     // WiFi Commands
-    {"wifi_set", prv_cmd_wifi_set, NULL, "Set WiFi credentials: wifi_set <ssid> <password>"},
+    {"wifi_set", prv_cmd_wifi_set, NULL, "Set WiFi credentials: wifi_set <ssid> <password> (use quotes for spaces)"},
     {"wifi_get", prv_cmd_wifi_get, NULL, "Get current WiFi credentials"},
 
     // MP3 Player Commands
@@ -332,6 +332,7 @@ static int prv_cmd_wifi_set(int argc, char* argv[], void* context)
     if (argc != 3)
     {
         cli_print("Usage: wifi_set <ssid> <password>");
+        cli_print("       Use quotes for SSIDs/passwords with spaces, e.g.: wifi_set \"My Network\" password123");
         return CLI_FAIL_STATUS;
     }
 
