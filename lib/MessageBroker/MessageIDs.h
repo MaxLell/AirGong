@@ -11,7 +11,7 @@ typedef enum
     // Test Messages and System Messages
     MSG_0001, // Chaos Elephant (Placeholder)
     MSG_0002, // Tickly Giraffe (Placeholder)
-    MSG_0003, // Set Logging Level on Module
+    MSG_0003, // Toggle Logging in Module
     MSG_0004, // Request System Status
 
     // Messages for the Modules
@@ -36,6 +36,15 @@ typedef enum
     MSG_0306, // Previous song
     MSG_0307, // Pause or play
     MSG_0308, // Command response
+
+    // Application Control Messages
+    MSG_0400, // Add schedule
+    MSG_0401, // Remove schedule
+    MSG_0402, // List schedules
+    MSG_0403, // Clear all schedules
+    MSG_0404, // Enable/disable scheduling
+    MSG_0405, // Schedule command response
+    MSG_0406, // Schedule list response
 
     E_TOPIC_LAST_TOPIC // Last Topic - DO NOT USE (Only for boundary checks)
 } msg_id_e;

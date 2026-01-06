@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include "ApplicationControl.h"
 #include "BlinkLed.h"
 #include "Console.h"
 #include "MP3Player.h"
@@ -52,6 +53,9 @@ void setup()
     timesync_init();
     timesync_start_task();
 
+    // Initialize Application Control
+    appcontrol_init();
+
     // Create console task
     xTaskCreate(console_task,        // Task function
                 "ConsoleTask",       // Task name
@@ -65,7 +69,13 @@ void setup()
     blinkled_init(LED_PIN);
 }
 
-void loop() {}
+void loop()
+{
+    // Run Application Control (checks schedules)
+    appcontrol_run();
+
+    delay(1000); // Run once per second
+}
 
 // ###########################################################################
 // # Task implementations

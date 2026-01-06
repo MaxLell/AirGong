@@ -74,6 +74,14 @@ static int prv_cmd_mp3_next(int argc, char* argv[], void* context);
 static int prv_cmd_mp3_previous(int argc, char* argv[], void* context);
 static int prv_cmd_mp3_pause(int argc, char* argv[], void* context);
 
+// Application Control Commands
+static void prv_schedule_callback(const msg_t* const message);
+static int prv_cmd_schedule_add(int argc, char* argv[], void* context);
+static int prv_cmd_schedule_remove(int argc, char* argv[], void* context);
+static int prv_cmd_schedule_list(int argc, char* argv[], void* context);
+static int prv_cmd_schedule_clear(int argc, char* argv[], void* context);
+static int prv_cmd_schedule_enable(int argc, char* argv[], void* context);
+
 // ###########################################################################
 // # Private Variables
 // ###########################################################################
@@ -117,6 +125,13 @@ static cli_binding_t cli_bindings[] = {
     {"speaker_previous", prv_cmd_mp3_previous, NULL, "Previous song"},
     {"speaker_pause", prv_cmd_mp3_pause, NULL, "Pause or play"},
 
+    // Application Control Commands
+    {"schedule_add", prv_cmd_schedule_add, NULL, "Add schedule: schedule_add <hour> <minute> <song_index>"},
+    {"schedule_remove", prv_cmd_schedule_remove, NULL, "Remove schedule: schedule_remove <id>"},
+    {"schedule_list", prv_cmd_schedule_list, NULL, "List all schedules"},
+    {"schedule_clear", prv_cmd_schedule_clear, NULL, "Clear all schedules"},
+    {"schedule_enable", prv_cmd_schedule_enable, NULL, "Enable/disable scheduling: schedule_enable <0|1>"},
+
     // Logging Commands
 
 };
@@ -136,7 +151,9 @@ void console_init(void)
     messagebroker_subscribe(MSG_0101, prv_time_callback);
     messagebroker_subscribe(MSG_0202, prv_wifi_callback);
     messagebroker_subscribe(MSG_0203, prv_wifi_callback);
-    messagebroker_subscribe(MSG_0308, prv_mp3_callback); // MP3 command responses
+    messagebroker_subscribe(MSG_0308, prv_mp3_callback);      // MP3 command responses
+    messagebroker_subscribe(MSG_0405, prv_schedule_callback); // Schedule responses
+    messagebroker_subscribe(MSG_0406, prv_schedule_callback); // Schedule list
 
     cli_init(&g_cli_cfg, prv_console_put_char);
 
@@ -605,6 +622,198 @@ static int prv_cmd_mp3_pause(int argc, char* argv[], void* context)
     msg.data_bytes = NULL;
 
     cli_print("Pause or Play");
+    messagebroker_publish(&msg);
+
+    return CLI_OK_STATUS;
+}
+
+// ============================
+// = Application Control Commands
+// ============================
+
+static void prv_schedule_callback(const msg_t* const message)
+{
+    switch (message->msg_id)
+    {
+        case MSG_0405:
+        {
+            msg_schedule_response_t* response = (msg_schedule_response_t*)message->data_bytes;
+
+            if (response->success)
+            {
+                if (response->schedule_id >= 0)
+                {
+                    cli_print("Schedule operation successful (ID: %d)", response->schedule_id);
+                }
+                else
+                {
+                    cli_print("Schedule operation successful");
+                }
+            }
+            else
+            {
+                cli_print("Schedule operation failed");
+            }
+            break;
+        }
+
+        case MSG_0406:
+        {
+            msg_schedule_list_t* list = (msg_schedule_list_t*)message->data_bytes;
+
+            if (list->count == 0)
+            {
+                cli_print("No schedules configured");
+            }
+            else
+            {
+                cli_print("Configured schedules:");
+                for (int i = 0; i < list->count; i++)
+                {
+                    cli_print("  [%d] %02d:%02d -> Song %d", list->schedules[i].schedule_id, list->schedules[i].hour,
+                              list->schedules[i].minute, list->schedules[i].song_index);
+                }
+            }
+            break;
+        }
+
+        default: break;
+    }
+}
+
+static int prv_cmd_schedule_add(int argc, char* argv[], void* context)
+{
+    (void)context;
+
+    if (argc != 4)
+    {
+        cli_print("Usage: schedule_add <hour> <minute> <song_index>");
+        cli_print("  hour: 0-23");
+        cli_print("  minute: 0-59");
+        cli_print("  song_index: 1-9999");
+        return CLI_FAIL_STATUS;
+    }
+
+    int hour = atoi(argv[1]);
+    int minute = atoi(argv[2]);
+    int song_index = atoi(argv[3]);
+
+    if (hour < 0 || hour > 23)
+    {
+        cli_print("Hour must be between 0 and 23");
+        return CLI_FAIL_STATUS;
+    }
+
+    if (minute < 0 || minute > 59)
+    {
+        cli_print("Minute must be between 0 and 59");
+        return CLI_FAIL_STATUS;
+    }
+
+    if (song_index < 1)
+    {
+        cli_print("Song index must be >= 1");
+        return CLI_FAIL_STATUS;
+    }
+
+    msg_schedule_add_t schedule;
+    schedule.hour = (u8)hour;
+    schedule.minute = (u8)minute;
+    schedule.song_index = (u16)song_index;
+
+    msg_t msg;
+    msg.msg_id = MSG_0400;
+    msg.data_size = sizeof(msg_schedule_add_t);
+    msg.data_bytes = (u8*)&schedule;
+
+    cli_print("Adding schedule: %02d:%02d -> Song %d", hour, minute, song_index);
+    messagebroker_publish(&msg);
+
+    return CLI_OK_STATUS;
+}
+
+static int prv_cmd_schedule_remove(int argc, char* argv[], void* context)
+{
+    (void)context;
+
+    if (argc != 2)
+    {
+        cli_print("Usage: schedule_remove <id>");
+        return CLI_FAIL_STATUS;
+    }
+
+    int schedule_id = atoi(argv[1]);
+
+    msg_schedule_remove_t remove_cmd;
+    remove_cmd.schedule_id = schedule_id;
+
+    msg_t msg;
+    msg.msg_id = MSG_0401;
+    msg.data_size = sizeof(msg_schedule_remove_t);
+    msg.data_bytes = (u8*)&remove_cmd;
+
+    cli_print("Removing schedule ID: %d", schedule_id);
+    messagebroker_publish(&msg);
+
+    return CLI_OK_STATUS;
+}
+
+static int prv_cmd_schedule_list(int argc, char* argv[], void* context)
+{
+    (void)argc;
+    (void)argv;
+    (void)context;
+
+    msg_t msg;
+    msg.msg_id = MSG_0402;
+    msg.data_size = 0;
+    msg.data_bytes = NULL;
+
+    messagebroker_publish(&msg);
+
+    return CLI_OK_STATUS;
+}
+
+static int prv_cmd_schedule_clear(int argc, char* argv[], void* context)
+{
+    (void)argc;
+    (void)argv;
+    (void)context;
+
+    msg_t msg;
+    msg.msg_id = MSG_0403;
+    msg.data_size = 0;
+    msg.data_bytes = NULL;
+
+    cli_print("Clearing all schedules...");
+    messagebroker_publish(&msg);
+
+    return CLI_OK_STATUS;
+}
+
+static int prv_cmd_schedule_enable(int argc, char* argv[], void* context)
+{
+    (void)context;
+
+    if (argc != 2)
+    {
+        cli_print("Usage: schedule_enable <0|1>");
+        cli_print("  0 = disable scheduling");
+        cli_print("  1 = enable scheduling");
+        return CLI_FAIL_STATUS;
+    }
+
+    int enabled = atoi(argv[1]);
+
+    msg_schedule_enable_t enable_cmd;
+    enable_cmd.enabled = (enabled != 0);
+
+    msg_t msg;
+    msg.msg_id = MSG_0404;
+    msg.data_size = sizeof(msg_schedule_enable_t);
+    msg.data_bytes = (u8*)&enable_cmd;
+
+    cli_print("Scheduling %s", enabled ? "enabled" : "disabled");
     messagebroker_publish(&msg);
 
     return CLI_OK_STATUS;

@@ -94,4 +94,45 @@ typedef struct
     int error_code; // Error code if not successful
 } msg_mp3_command_response_t;
 
+// =============================
+// Application Control Message Structures
+// =============================
+
+typedef struct
+{
+    u8 hour;        // Hour (0-23)
+    u8 minute;      // Minute (0-59)
+    u16 song_index; // Song index to play
+} msg_schedule_add_t;
+
+typedef struct
+{
+    int schedule_id; // ID of schedule to remove
+} msg_schedule_remove_t;
+
+typedef struct
+{
+    bool enabled; // Enable or disable scheduling
+} msg_schedule_enable_t;
+
+typedef struct
+{
+    bool success;    // Whether command was successful
+    int schedule_id; // Schedule ID (-1 if not applicable)
+} msg_schedule_response_t;
+
+typedef struct
+{
+    int schedule_id;
+    u8 hour;
+    u8 minute;
+    u16 song_index;
+} schedule_info_t;
+
+typedef struct
+{
+    u8 count;                      // Number of schedules
+    schedule_info_t schedules[20]; // Schedule entries
+} msg_schedule_list_t;
+
 #endif // MESSAGE_DEFINITIONS_H
