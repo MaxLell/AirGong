@@ -48,7 +48,7 @@ static void prv_mp3_message_handler(const msg_t* const message);
 // ###########################################################################
 
 static bool is_initialized = false;
-static bool logging_enabled = false; // Logging initially disabled
+static bool g_logging_is_active = false; // Logging initially disabled
 
 // MP3 Player instance - für ESP32C6 verwenden wir HardwareSerial
 static WT2605C<HardwareSerial> mp3_player;
@@ -111,8 +111,8 @@ static void prv_mp3_message_handler(const msg_t* const message)
             if (cmd->module_id == MODULE_MP3PLAYER || cmd->module_id == MODULE_ALL
                 || strncmp(cmd->module_name, "mp3player", MODULE_NAME_MAX_LENGTH) == 0)
             {
-                logging_enabled = cmd->enabled;
-                if (logging_enabled)
+                g_logging_is_active = cmd->enabled;
+                if (g_logging_is_active)
                 {
                     Serial.println("[MP3Player] Logging enabled");
                 }
@@ -125,7 +125,7 @@ static void prv_mp3_message_handler(const msg_t* const message)
             msg_mp3_set_volume_t* cmd = (msg_mp3_set_volume_t*)message->data_bytes;
             result = mp3_player.volume(cmd->volume);
 
-            if (logging_enabled)
+            if (g_logging_is_active)
             {
                 Serial.printf("[MP3Player] Set volume to %d, result: %d\n", cmd->volume, result);
             }
@@ -177,7 +177,7 @@ static void prv_mp3_message_handler(const msg_t* const message)
             msg_mp3_play_song_t* cmd = (msg_mp3_play_song_t*)message->data_bytes;
             mp3_player.playSDRootSong(cmd->song_index);
 
-            if (logging_enabled)
+            if (g_logging_is_active)
             {
                 Serial.printf("[MP3Player] Playing song %d\n", cmd->song_index);
             }

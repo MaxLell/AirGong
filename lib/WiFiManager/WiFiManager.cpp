@@ -43,7 +43,7 @@
 // # Private defines
 // ###########################################################################
 #define WIFI_CONNECT_TIMEOUT_MS 10000
-#define WIFI_CHECK_INTERVAL_MS  5000
+#define WIFI_CHECK_INTERVAL_MS  20000
 #define PREFERENCES_NAMESPACE   "wifi"
 #define PREF_KEY_SSID           "ssid"
 #define PREF_KEY_PASSWORD       "password"
@@ -63,7 +63,7 @@ static void prv_publish_connection_status(void);
 // ###########################################################################
 static bool is_initialized = false;
 static bool is_connected = false;
-static bool logging_enabled = false; // Logging initially disabled
+static bool g_logging_is_active = false; // Logging initially disabled
 static TaskHandle_t wifimanager_task_handle = NULL;
 static Preferences preferences;
 
@@ -163,14 +163,14 @@ static void prv_connect_to_wifi(void)
 {
     if (!has_credentials)
     {
-        if (logging_enabled)
+        if (g_logging_is_active)
         {
             Serial.println("[WiFiManager] No credentials available");
         }
         return;
     }
 
-    if (logging_enabled)
+    if (g_logging_is_active)
     {
         Serial.printf("[WiFiManager] Connecting to SSID: %s\n", current_ssid);
     }
@@ -196,12 +196,12 @@ static void prv_connect_to_wifi(void)
     while (WiFi.status() != WL_CONNECTED && (millis() - start_time) < WIFI_CONNECT_TIMEOUT_MS)
     {
         delay(500);
-        if (logging_enabled)
+        if (g_logging_is_active)
         {
             Serial.print(".");
         }
     }
-    if (logging_enabled)
+    if (g_logging_is_active)
     {
         Serial.println();
     }
@@ -209,7 +209,7 @@ static void prv_connect_to_wifi(void)
     if (WiFi.status() == WL_CONNECTED)
     {
         is_connected = true;
-        if (logging_enabled)
+        if (g_logging_is_active)
         {
             Serial.println("[WiFiManager] Successfully connected");
         }
@@ -218,7 +218,7 @@ static void prv_connect_to_wifi(void)
     else
     {
         is_connected = false;
-        if (logging_enabled)
+        if (g_logging_is_active)
         {
             Serial.println("[WiFiManager] Connection failed");
         }
@@ -242,7 +242,7 @@ static void prv_save_credentials(const char* ssid, const char* password)
 
     has_credentials = true;
 
-    if (logging_enabled)
+    if (g_logging_is_active)
     {
         Serial.println("[WiFiManager] Credentials saved to storage");
     }
@@ -302,13 +302,13 @@ static void prv_message_broker_callback(const msg_t* const message)
         case MSG_0003: // Set logging
         {
             msg_set_logging_t* cmd = (msg_set_logging_t*)message->data_bytes;
-            
+
             // Check if this message is for us
-            if (cmd->module_id == MODULE_WIFIMANAGER || cmd->module_id == MODULE_ALL ||
-                strncmp(cmd->module_name, "wifimanager", MODULE_NAME_MAX_LENGTH) == 0)
+            if (cmd->module_id == MODULE_WIFIMANAGER || cmd->module_id == MODULE_ALL
+                || strncmp(cmd->module_name, "wifimanager", MODULE_NAME_MAX_LENGTH) == 0)
             {
-                logging_enabled = cmd->enabled;
-                if (logging_enabled)
+                g_logging_is_active = cmd->enabled;
+                if (g_logging_is_active)
                 {
                     Serial.println("[WiFiManager] Logging enabled");
                 }

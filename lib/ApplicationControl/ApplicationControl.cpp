@@ -73,7 +73,7 @@ static void prv_load_schedules_from_flash(void);
 // ###########################################################################
 static bool is_initialized = false;
 static bool scheduling_enabled = true;
-static bool logging_enabled = false; // Logging initially disabled
+static bool g_logging_is_active = false; // Logging initially disabled
 static schedule_entry_t schedules[MAX_SCHEDULES];
 static struct tm current_time;
 static bool time_valid = false;
@@ -147,8 +147,8 @@ static void prv_message_handler(const msg_t* const message)
             if (cmd->module_id == MODULE_APPCONTROL || cmd->module_id == MODULE_ALL
                 || strncmp(cmd->module_name, "appcontrol", MODULE_NAME_MAX_LENGTH) == 0)
             {
-                logging_enabled = cmd->enabled;
-                if (logging_enabled)
+                g_logging_is_active = cmd->enabled;
+                if (g_logging_is_active)
                 {
                     Serial.println("[AppControl] Logging enabled");
                 }
@@ -332,7 +332,7 @@ static void prv_check_schedules(const struct tm* timeinfo)
         // Check if time matches and hasn't been triggered yet this minute
         if (schedules[i].hour == current_hour && schedules[i].minute == current_min && !schedules[i].triggered)
         {
-            if (logging_enabled)
+            if (g_logging_is_active)
             {
                 Serial.printf("[AppControl] Triggering schedule %d: Playing song %d at %02d:%02d\n", i,
                               schedules[i].song_index, current_hour, current_min);
