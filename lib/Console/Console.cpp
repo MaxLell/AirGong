@@ -126,7 +126,7 @@ static cli_binding_t cli_bindings[] = {
     {"speaker_pause", prv_cmd_mp3_pause, NULL, "Pause or play"},
 
     // Application Control Commands
-    {"schedule_add", prv_cmd_schedule_add, NULL, "Add schedule: schedule_add <hour> <minute> <song_index> <weekdays>"},
+    {"schedule_add", prv_cmd_schedule_add, NULL, "Add schedule: schedule_add <HHMM> <weekdays> <song_index>"},
     {"schedule_remove", prv_cmd_schedule_remove, NULL, "Remove schedule: schedule_remove <id>"},
     {"schedule_list", prv_cmd_schedule_list, NULL, "List all schedules"},
     {"schedule_clear", prv_cmd_schedule_clear, NULL, "Clear all schedules"},
@@ -689,20 +689,24 @@ static int prv_cmd_schedule_add(int argc, char* argv[], void* context)
 {
     (void)context;
 
-    if (argc != 5)
+    if (argc != 4)
     {
-        cli_print("Usage: schedule_add <hour> <minute> <song_index> <weekdays>");
-        cli_print("  hour: 0-23");
-        cli_print("  minute: 0-59");
-        cli_print("  song_index: 1-9999");
+        cli_print("Usage: schedule_add <HHMM> <weekdays> <song_index>");
+        cli_print("  HHMM: Time in 24h format (e.g., 1720 for 17:20)");
         cli_print("  weekdays: Comma-separated list or '*' for all days");
-        cli_print("    Valid days: Mo, Tue, Wed, Thu, Fri, Sat, Sun");
-        cli_print("    Examples: 'Mo,Wed,Fri' or '*' or 'Mo,Tue,Wed,Thu,Fri'");
+        cli_print("    Valid days: Mon, Tue, Wed, Thu, Fri, Sat, Sun");
+        cli_print("    Examples: 'Mon,Wed,Fri' or '*' or 'Mon,Tue,Wed,Thu,Fri'");
+        cli_print("  song_index: 1-9999");
+        cli_print("Examples:");
+        cli_print("  schedule_add 1720 Mon,Tue,Wed 2");
+        cli_print("  schedule_add 0830 * 1");
         return CLI_FAIL_STATUS;
     }
 
-    int hour = atoi(argv[1]);
-    int minute = atoi(argv[2]);
+    // Parse time from HHMM format
+    int time_value = atoi(argv[1]);
+    int hour = time_value / 100;
+    int minute = time_value % 100;
     int song_index = atoi(argv[3]);
 
     if (hour < 0 || hour > 23)
@@ -727,14 +731,14 @@ static int prv_cmd_schedule_add(int argc, char* argv[], void* context)
     u8 weekday_mask = 0;
 
     // Check if all days ('*')
-    if (strcmp(argv[4], "*") == 0)
+    if (strcmp(argv[2], "*") == 0)
     {
         weekday_mask = 0x7F; // All 7 days (bits 0-6)
     }
     else
     {
         // Parse comma-separated weekday list
-        char* weekdays_copy = argv[4]; // Work with the original string
+        char* weekdays_copy = argv[2]; // Work with the original string
         char* token = strtok(weekdays_copy, ",");
 
         while (token != NULL)
@@ -746,7 +750,8 @@ static int prv_cmd_schedule_add(int argc, char* argv[], void* context)
             }
 
             // Parse weekday
-            if (strcmp(token, "Mo") == 0 || strcmp(token, "mon") == 0)
+            if (strcmp(token, "Mon") == 0 || strcmp(token, "mon") == 0 || strcmp(token, "Mo") == 0
+                || strcmp(token, "mo") == 0)
             {
                 weekday_mask |= (1 << 0); // Monday = bit 0
             }
@@ -777,7 +782,7 @@ static int prv_cmd_schedule_add(int argc, char* argv[], void* context)
             else
             {
                 cli_print("Invalid weekday: %s", token);
-                cli_print("Valid days: Mo, Tue, Wed, Thu, Fri, Sat, Sun");
+                cli_print("Valid days: Mon, Tue, Wed, Thu, Fri, Sat, Sun");
                 return CLI_FAIL_STATUS;
             }
 
