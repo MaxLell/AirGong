@@ -55,6 +55,7 @@ typedef struct
     u8 hour;             // Hour (0-23)
     u8 minute;           // Minute (0-59)
     u16 song_index;      // Song index to play
+    u8 weekday_mask;     // Weekday mask: Bit 0=Monday, Bit 1=Tuesday, ..., Bit 6=Sunday
     bool triggered;      // Flag to avoid re-triggering in the same minute
     u8 last_checked_min; // Last checked minute to detect minute changes
 } schedule_entry_t;
@@ -94,6 +95,7 @@ void appcontrol_init(void)
         schedules[i].hour = 0;
         schedules[i].minute = 0;
         schedules[i].song_index = 0;
+        schedules[i].weekday_mask = 0x7F; // Default: all days (Mon-Sun)
         schedules[i].triggered = false;
         schedules[i].last_checked_min = 255; // Invalid value to force initial check
     }
@@ -190,6 +192,7 @@ static void prv_message_handler(const msg_t* const message)
                 schedules[free_slot].hour = cmd->hour;
                 schedules[free_slot].minute = cmd->minute;
                 schedules[free_slot].song_index = cmd->song_index;
+                schedules[free_slot].weekday_mask = cmd->weekday_mask;
                 schedules[free_slot].triggered = false;
                 schedules[free_slot].last_checked_min = 255;
 
@@ -255,6 +258,7 @@ static void prv_message_handler(const msg_t* const message)
                     list.schedules[list.count].hour = schedules[i].hour;
                     list.schedules[list.count].minute = schedules[i].minute;
                     list.schedules[list.count].song_index = schedules[i].song_index;
+                    list.schedules[list.count].weekday_mask = schedules[i].weekday_mask;
                     list.count++;
                 }
             }
@@ -314,6 +318,9 @@ static void prv_check_schedules(const struct tm* timeinfo)
 {
     u8 current_hour = timeinfo->tm_hour;
     u8 current_min = timeinfo->tm_min;
+    u8 current_weekday = (timeinfo->tm_wday == 0)
+                             ? 6
+                             : (timeinfo->tm_wday - 1); // Convert Sunday=0 to Sunday=6, Monday=1 to Monday=0, etc.
 
     for (int i = 0; i < MAX_SCHEDULES; i++)
     {
@@ -329,13 +336,17 @@ static void prv_check_schedules(const struct tm* timeinfo)
             schedules[i].triggered = false; // Reset trigger flag on minute change
         }
 
-        // Check if time matches and hasn't been triggered yet this minute
-        if (schedules[i].hour == current_hour && schedules[i].minute == current_min && !schedules[i].triggered)
+        // Check if weekday matches (bit 0 = Monday, bit 6 = Sunday)
+        bool weekday_matches = (schedules[i].weekday_mask & (1 << current_weekday)) != 0;
+
+        // Check if time matches, weekday matches, and hasn't been triggered yet this minute
+        if (schedules[i].hour == current_hour && schedules[i].minute == current_min && weekday_matches
+            && !schedules[i].triggered)
         {
             if (g_logging_is_active)
             {
-                Serial.printf("[AppControl] Triggering schedule %d: Playing song %d at %02d:%02d\n", i,
-                              schedules[i].song_index, current_hour, current_min);
+                Serial.printf("[AppControl] Triggering schedule %d: Playing song %d at %02d:%02d (weekday %d)\n", i,
+                              schedules[i].song_index, current_hour, current_min, current_weekday);
             }
 
             // Trigger song playback
@@ -393,12 +404,14 @@ static void prv_save_schedules_to_flash(void)
                 u8 hour;
                 u8 minute;
                 u16 song_index;
+                u8 weekday_mask; // Weekday mask for schedule
                 int original_id; // Store original array position
             } storage_data;
 
             storage_data.hour = schedules[i].hour;
             storage_data.minute = schedules[i].minute;
             storage_data.song_index = schedules[i].song_index;
+            storage_data.weekday_mask = schedules[i].weekday_mask;
             storage_data.original_id = i;
 
             preferences.putBytes(key, &storage_data, sizeof(storage_data));
@@ -430,6 +443,7 @@ static void prv_load_schedules_from_flash(void)
                 u8 hour;
                 u8 minute;
                 u16 song_index;
+                u8 weekday_mask;
                 int original_id;
             } storage_data;
 
@@ -459,6 +473,7 @@ static void prv_load_schedules_from_flash(void)
                     schedules[target_slot].hour = storage_data.hour;
                     schedules[target_slot].minute = storage_data.minute;
                     schedules[target_slot].song_index = storage_data.song_index;
+                    schedules[target_slot].weekday_mask = storage_data.weekday_mask;
                     schedules[target_slot].triggered = false;
                     schedules[target_slot].last_checked_min = 255;
                 }

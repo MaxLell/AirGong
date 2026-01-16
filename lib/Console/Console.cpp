@@ -126,7 +126,7 @@ static cli_binding_t cli_bindings[] = {
     {"speaker_pause", prv_cmd_mp3_pause, NULL, "Pause or play"},
 
     // Application Control Commands
-    {"schedule_add", prv_cmd_schedule_add, NULL, "Add schedule: schedule_add <hour> <minute> <song_index>"},
+    {"schedule_add", prv_cmd_schedule_add, NULL, "Add schedule: schedule_add <hour> <minute> <song_index> <weekdays>"},
     {"schedule_remove", prv_cmd_schedule_remove, NULL, "Remove schedule: schedule_remove <id>"},
     {"schedule_list", prv_cmd_schedule_list, NULL, "List all schedules"},
     {"schedule_clear", prv_cmd_schedule_clear, NULL, "Clear all schedules"},
@@ -626,8 +626,56 @@ static void prv_schedule_callback(const msg_t* const message)
                 cli_print("Configured schedules:");
                 for (int i = 0; i < list->count; i++)
                 {
-                    cli_print("  [%d] %02d:%02d -> Song %d", list->schedules[i].schedule_id, list->schedules[i].hour,
-                              list->schedules[i].minute, list->schedules[i].song_index);
+                    // Build weekday string
+                    char weekday_str[32] = "";
+                    bool first = true;
+
+                    if (list->schedules[i].weekday_mask == 0x7F)
+                    {
+                        strcpy(weekday_str, "All days");
+                    }
+                    else
+                    {
+                        if (list->schedules[i].weekday_mask & (1 << 0))
+                        {
+                            strcat(weekday_str, first ? "Mo" : ",Mo");
+                            first = false;
+                        }
+                        if (list->schedules[i].weekday_mask & (1 << 1))
+                        {
+                            strcat(weekday_str, first ? "Tue" : ",Tue");
+                            first = false;
+                        }
+                        if (list->schedules[i].weekday_mask & (1 << 2))
+                        {
+                            strcat(weekday_str, first ? "Wed" : ",Wed");
+                            first = false;
+                        }
+                        if (list->schedules[i].weekday_mask & (1 << 3))
+                        {
+                            strcat(weekday_str, first ? "Thu" : ",Thu");
+                            first = false;
+                        }
+                        if (list->schedules[i].weekday_mask & (1 << 4))
+                        {
+                            strcat(weekday_str, first ? "Fri" : ",Fri");
+                            first = false;
+                        }
+                        if (list->schedules[i].weekday_mask & (1 << 5))
+                        {
+                            strcat(weekday_str, first ? "Sat" : ",Sat");
+                            first = false;
+                        }
+                        if (list->schedules[i].weekday_mask & (1 << 6))
+                        {
+                            strcat(weekday_str, first ? "Sun" : ",Sun");
+                            first = false;
+                        }
+                    }
+
+                    cli_print("  [%d] %02d:%02d -> Song %d (%s)", list->schedules[i].schedule_id,
+                              list->schedules[i].hour, list->schedules[i].minute, list->schedules[i].song_index,
+                              weekday_str);
                 }
             }
             break;
@@ -641,12 +689,15 @@ static int prv_cmd_schedule_add(int argc, char* argv[], void* context)
 {
     (void)context;
 
-    if (argc != 4)
+    if (argc != 5)
     {
-        cli_print("Usage: schedule_add <hour> <minute> <song_index>");
+        cli_print("Usage: schedule_add <hour> <minute> <song_index> <weekdays>");
         cli_print("  hour: 0-23");
         cli_print("  minute: 0-59");
         cli_print("  song_index: 1-9999");
+        cli_print("  weekdays: Comma-separated list or '*' for all days");
+        cli_print("    Valid days: Mo, Tue, Wed, Thu, Fri, Sat, Sun");
+        cli_print("    Examples: 'Mo,Wed,Fri' or '*' or 'Mo,Tue,Wed,Thu,Fri'");
         return CLI_FAIL_STATUS;
     }
 
@@ -672,17 +723,86 @@ static int prv_cmd_schedule_add(int argc, char* argv[], void* context)
         return CLI_FAIL_STATUS;
     }
 
+    // Parse weekdays
+    u8 weekday_mask = 0;
+
+    // Check if all days ('*')
+    if (strcmp(argv[4], "*") == 0)
+    {
+        weekday_mask = 0x7F; // All 7 days (bits 0-6)
+    }
+    else
+    {
+        // Parse comma-separated weekday list
+        char* weekdays_copy = argv[4]; // Work with the original string
+        char* token = strtok(weekdays_copy, ",");
+
+        while (token != NULL)
+        {
+            // Trim leading spaces
+            while (*token == ' ')
+            {
+                token++;
+            }
+
+            // Parse weekday
+            if (strcmp(token, "Mo") == 0 || strcmp(token, "mon") == 0)
+            {
+                weekday_mask |= (1 << 0); // Monday = bit 0
+            }
+            else if (strcmp(token, "Tue") == 0 || strcmp(token, "tue") == 0)
+            {
+                weekday_mask |= (1 << 1); // Tuesday = bit 1
+            }
+            else if (strcmp(token, "Wed") == 0 || strcmp(token, "wed") == 0)
+            {
+                weekday_mask |= (1 << 2); // Wednesday = bit 2
+            }
+            else if (strcmp(token, "Thu") == 0 || strcmp(token, "thu") == 0)
+            {
+                weekday_mask |= (1 << 3); // Thursday = bit 3
+            }
+            else if (strcmp(token, "Fri") == 0 || strcmp(token, "fri") == 0)
+            {
+                weekday_mask |= (1 << 4); // Friday = bit 4
+            }
+            else if (strcmp(token, "Sat") == 0 || strcmp(token, "sat") == 0)
+            {
+                weekday_mask |= (1 << 5); // Saturday = bit 5
+            }
+            else if (strcmp(token, "Sun") == 0 || strcmp(token, "sun") == 0)
+            {
+                weekday_mask |= (1 << 6); // Sunday = bit 6
+            }
+            else
+            {
+                cli_print("Invalid weekday: %s", token);
+                cli_print("Valid days: Mo, Tue, Wed, Thu, Fri, Sat, Sun");
+                return CLI_FAIL_STATUS;
+            }
+
+            token = strtok(NULL, ",");
+        }
+    }
+
+    if (weekday_mask == 0)
+    {
+        cli_print("No valid weekdays specified");
+        return CLI_FAIL_STATUS;
+    }
+
     msg_schedule_add_t schedule;
     schedule.hour = (u8)hour;
     schedule.minute = (u8)minute;
     schedule.song_index = (u16)song_index;
+    schedule.weekday_mask = weekday_mask;
 
     msg_t msg;
     msg.msg_id = MSG_0400;
     msg.data_size = sizeof(msg_schedule_add_t);
     msg.data_bytes = (u8*)&schedule;
 
-    cli_print("Adding schedule: %02d:%02d -> Song %d", hour, minute, song_index);
+    cli_print("Adding schedule: %02d:%02d -> Song %d (weekday mask: 0x%02X)", hour, minute, song_index, weekday_mask);
     messagebroker_publish(&msg);
 
     return CLI_OK_STATUS;

@@ -123,9 +123,10 @@ typedef struct
 
 typedef struct
 {
-    u8 hour;        // Hour (0-23)
-    u8 minute;      // Minute (0-59)
-    u16 song_index; // Song index to play
+    u8 hour;         // Hour (0-23)
+    u8 minute;       // Minute (0-59)
+    u16 song_index;  // Song index to play
+    u8 weekday_mask; // Weekday mask: Bit 0=Monday, Bit 1=Tuesday, ..., Bit 6=Sunday (0x7F = all days)
 } msg_schedule_add_t;
 
 typedef struct
@@ -150,6 +151,7 @@ typedef struct
     u8 hour;
     u8 minute;
     u16 song_index;
+    u8 weekday_mask; // Weekday mask: Bit 0=Monday, Bit 1=Tuesday, ..., Bit 6=Sunday
 } schedule_info_t;
 
 typedef struct
